@@ -58,7 +58,7 @@ const FeedPost = ({ post }: FeedPostProps) => {
         <div className="aspect-video bg-neutral-200">
           <div className="w-full h-full flex items-center justify-center relative">
             <img 
-              src={post.mediaUrl || "https://images.unsplash.com/photo-1517466787929-bc90951d0974?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=800&q=80"} 
+              src={post.mediaUrl || ""} 
               alt="Football match highlight" 
               className="w-full h-full object-cover"
             />

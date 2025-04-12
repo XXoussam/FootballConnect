@@ -316,8 +316,9 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(users)
       .where(
-        // Exclude users already connected or the current user
-        sql`${users.id} NOT IN (${excludeIds.join(',')})`
+        excludeIds.length > 0
+          ? sql`${users.id} NOT IN (${sql.join(excludeIds.map(id => sql`${id}`), sql`, `)})`
+          : sql`${users.id} != ${userId}`
       )
       .limit(5);
     
