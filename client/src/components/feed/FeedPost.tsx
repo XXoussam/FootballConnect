@@ -14,9 +14,12 @@ interface FeedPostProps {
 const FeedPost = ({ post }: FeedPostProps) => {
   const [comment, setComment] = useState("");
   
-  const formatPostDate = (date: string) => {
+  const formatPostDate = (date: string | Date | null) => {
     try {
-      return formatDistanceToNow(new Date(date), { addSuffix: false });
+      if (date) {
+        return formatDistanceToNow(new Date(date), { addSuffix: false });
+      }
+      return "recently";
     } catch (error) {
       return "recently";
     }
@@ -130,7 +133,7 @@ const FeedPost = ({ post }: FeedPostProps) => {
           <Link href={`/profile/${post.author.id}`}>
             <a className="flex-shrink-0">
               <Avatar className="w-12 h-12">
-                <AvatarImage src={post.author.avatarUrl} alt={post.author.username} />
+                <AvatarImage src={post.author.avatarUrl || ""} alt={post.author.username} />
                 <AvatarFallback>{post.author.username.substring(0, 2).toUpperCase()}</AvatarFallback>
               </Avatar>
             </a>
@@ -181,8 +184,8 @@ const FeedPost = ({ post }: FeedPostProps) => {
           <div className="flex gap-2">
             <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0">
               <Avatar className="w-full h-full">
-                <AvatarImage src="https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=100&q=80" />
-                <AvatarFallback>ME</AvatarFallback>
+                <AvatarImage src={post.author.avatarUrl || ""} alt={post.author.username} />
+                <AvatarFallback>{post.author.username.substring(0, 2).toUpperCase()}</AvatarFallback>
               </Avatar>
             </div>
             <div className="flex-grow">

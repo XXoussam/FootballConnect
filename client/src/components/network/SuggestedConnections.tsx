@@ -103,7 +103,7 @@ const SuggestedConnections = ({ limit = 2 }: SuggestedConnectionsProps) => {
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0">
                 <Avatar className="w-full h-full">
-                  <AvatarImage src={connection.user.avatarUrl} alt={connection.user.fullName} />
+                  <AvatarImage src={connection.user.avatarUrl || ""} alt={connection.user.fullName} />
                   <AvatarFallback>{connection.user.fullName.substring(0, 2).toUpperCase()}</AvatarFallback>
                 </Avatar>
               </div>

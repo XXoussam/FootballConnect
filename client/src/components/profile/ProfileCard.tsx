@@ -43,7 +43,7 @@ const ProfileCard = ({ user, isCurrentUser = false }: ProfileCardProps) => {
           <div className="relative">
             <div className="w-24 h-24 rounded-full border-4 border-white overflow-hidden">
               <Avatar className="w-full h-full">
-                <AvatarImage src="https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=200&q=80" />
+                <AvatarImage src={user.avatarUrl || ""} alt={user.fullName || user.username} />
                 <AvatarFallback>{user.username.substring(0, 2).toUpperCase()}</AvatarFallback>
               </Avatar>
             </div>
