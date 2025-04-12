@@ -85,10 +85,10 @@ const Opportunities = () => {
       opportunity.club.toLowerCase().includes(searchQuery.toLowerCase()) ||
       opportunity.description?.toLowerCase().includes(searchQuery.toLowerCase());
     
-    const matchesPosition = positionFilter === "" || 
+    const matchesPosition = positionFilter === "all" || positionFilter === "" || 
       opportunity.position?.toLowerCase() === positionFilter.toLowerCase();
     
-    const matchesLocation = locationFilter === "" ||
+    const matchesLocation = locationFilter === "all" || locationFilter === "" ||
       opportunity.location.toLowerCase().includes(locationFilter.toLowerCase());
     
     return matchesSearch && matchesPosition && matchesLocation;
@@ -128,7 +128,7 @@ const Opportunities = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
-                  <SelectItem value="">All Positions</SelectItem>
+                  <SelectItem value="all">All Positions</SelectItem>
                   <SelectItem value="goalkeeper">Goalkeeper</SelectItem>
                   <SelectItem value="defender">Defender</SelectItem>
                   <SelectItem value="midfielder">Midfielder</SelectItem>
@@ -146,7 +146,7 @@ const Opportunities = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
-                  <SelectItem value="">All Locations</SelectItem>
+                  <SelectItem value="all">All Locations</SelectItem>
                   <SelectItem value="UK">United Kingdom</SelectItem>
                   <SelectItem value="Spain">Spain</SelectItem>
                   <SelectItem value="Italy">Italy</SelectItem>
