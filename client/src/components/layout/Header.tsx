@@ -80,8 +80,8 @@ const Header = () => {
               
               <Link href="/profile">
                 <Avatar className="h-10 w-10 cursor-pointer">
-                  <AvatarImage src={currentUser.avatarUrl || ""} alt={currentUser.fullName || currentUser.username} />
                   <AvatarFallback>{currentUser.username.substring(0, 2).toUpperCase()}</AvatarFallback>
+                  {currentUser.avatarUrl && <AvatarImage src={currentUser.avatarUrl} alt={currentUser.fullName || currentUser.username} />}
                 </Avatar>
               </Link>
             </div>

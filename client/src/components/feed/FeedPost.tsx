@@ -133,8 +133,8 @@ const FeedPost = ({ post }: FeedPostProps) => {
           <Link href={`/profile/${post.author.id}`}>
             <a className="flex-shrink-0">
               <Avatar className="w-12 h-12">
-                <AvatarImage src={post.author.avatarUrl || ""} alt={post.author.username} />
                 <AvatarFallback>{post.author.username.substring(0, 2).toUpperCase()}</AvatarFallback>
+                {post.author.avatarUrl && <AvatarImage src={post.author.avatarUrl} alt={post.author.username} />}
               </Avatar>
             </a>
           </Link>
@@ -184,8 +184,8 @@ const FeedPost = ({ post }: FeedPostProps) => {
           <div className="flex gap-2">
             <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0">
               <Avatar className="w-full h-full">
-                <AvatarImage src={post.author.avatarUrl || ""} alt={post.author.username} />
                 <AvatarFallback>{post.author.username.substring(0, 2).toUpperCase()}</AvatarFallback>
+                {post.author.avatarUrl && <AvatarImage src={post.author.avatarUrl} alt={post.author.username} />}
               </Avatar>
             </div>
             <div className="flex-grow">

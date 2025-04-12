@@ -45,7 +45,7 @@ const SuggestedConnections = ({ limit = 2 }: SuggestedConnectionsProps) => {
         fullName: "Pep Guardiola",
         position: "Manager",
         club: "Manchester City FC",
-        avatarUrl: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=100&q=80"
+        avatarUrl: ""
       }
     },
     {
@@ -103,8 +103,8 @@ const SuggestedConnections = ({ limit = 2 }: SuggestedConnectionsProps) => {
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0">
                 <Avatar className="w-full h-full">
-                  <AvatarImage src={connection.user.avatarUrl || ""} alt={connection.user.fullName} />
                   <AvatarFallback>{connection.user.fullName.substring(0, 2).toUpperCase()}</AvatarFallback>
+                  {connection.user.avatarUrl && <AvatarImage src={connection.user.avatarUrl} alt={connection.user.fullName} />}
                 </Avatar>
               </div>
               <div className="flex-grow min-w-0">

@@ -41,10 +41,10 @@ const ProfileCard = ({ user, isCurrentUser = false }: ProfileCardProps) => {
       <div className="px-6 pt-0 pb-6 relative">
         <div className="absolute -top-12 left-6">
           <div className="relative">
-            <div className="w-24 h-24 rounded-full border-4 border-white overflow-hidden">
+            <div className="w-24 h-24 rounded-full border-4 border-white overflow-hidden bg-gray-100">
               <Avatar className="w-full h-full">
-                <AvatarImage src={user.avatarUrl || ""} alt={user.fullName || user.username} />
                 <AvatarFallback>{user.username.substring(0, 2).toUpperCase()}</AvatarFallback>
+                {user.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.fullName || user.username} />}
               </Avatar>
             </div>
             {user.verified && (
