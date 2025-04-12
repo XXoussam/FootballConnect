@@ -7,6 +7,20 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Opportunity } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 
+// Sample opportunity type to ensure proper type matching
+type SampleOpportunity = {
+  id: number;
+  title: string;
+  club: string;
+  location: string;
+  category: string;
+  position: string | null;
+  description: string | null;
+  salary: string | null;
+  type: string | null;
+  createdAt: Date;
+};
+
 const Opportunities = () => {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
@@ -18,7 +32,7 @@ const Opportunities = () => {
   });
 
   // Sample data for UI display
-  const sampleOpportunities: Opportunity[] = [
+  const sampleOpportunities: SampleOpportunity[] = [
     {
       id: 1,
       title: "Midfielder Needed",
@@ -28,7 +42,8 @@ const Opportunities = () => {
       position: "Midfielder",
       description: "Looking for an experienced midfielder with strong passing skills and field vision. Opportunity to join one of the Premier League's top clubs.",
       salary: "$50k-$80k",
-      createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+      type: null,
+      createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
     },
     {
       id: 2,
@@ -39,7 +54,8 @@ const Opportunities = () => {
       position: "Forward",
       description: "Scouting event for talented forwards. Showcase your skills to Juventus scouts and potentially secure a spot in our academy or first team.",
       type: "Tryout",
-      createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+      salary: null,
+      createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
     },
     {
       id: 3,
@@ -50,7 +66,8 @@ const Opportunities = () => {
       position: "Defender",
       description: "Bayern Munich is seeking a strong center-back with exceptional defensive skills, aerial ability, and leadership qualities to strengthen our backline.",
       salary: "$70k-$90k",
-      createdAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
+      type: null,
+      createdAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
     },
     {
       id: 4,
@@ -61,7 +78,8 @@ const Opportunities = () => {
       position: "Coach",
       description: "Experienced goalkeeper coach needed to train and develop our goalkeeping talent across all levels from academy to first team.",
       salary: "$65k-$85k",
-      createdAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
+      type: null,
+      createdAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
     },
     {
       id: 5,
@@ -72,11 +90,13 @@ const Opportunities = () => {
       position: "Various",
       description: "Ajax's prestigious youth academy is holding trials for talented young players across all positions. Ages 12-18 welcome.",
       type: "Youth Development",
-      createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+      salary: null,
+      createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
     }
   ];
 
-  const displayOpportunities = opportunities || sampleOpportunities;
+  // Use sample data when API data is not available
+  const displayOpportunities = opportunities || sampleOpportunities as any;
 
   // Apply filters
   const filteredOpportunities = displayOpportunities.filter(opportunity => {
