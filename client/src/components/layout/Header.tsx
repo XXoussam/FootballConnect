@@ -3,15 +3,30 @@ import { Link, useLocation } from "wouter";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { User } from "@shared/schema";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { queryClient } from "@/lib/queryClient";
 
 const Header = () => {
   const [location] = useLocation();
+  const [, navigate] = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const { data: currentUser, isLoading } = useQuery<User | null>({
     queryKey: ["/api/users/me"],
+  });
+
+  // Logout mutation: clears user session and redirects
+  const logoutMutation = useMutation({
+    mutationFn: async () => {
+      // If you use a token/cookie, clear it here
+      // For now, just invalidate the user query
+      await queryClient.setQueryData(["/api/users/me"], null);
+    },
+    onSuccess: () => {
+      navigate("/login");
+    },
   });
 
   const isActive = (path: string) => location === path;
@@ -78,12 +93,21 @@ const Header = () => {
                 <span className="absolute top-0 right-0 bg-amber-500 w-2 h-2 rounded-full"></span>
               </button>
               
-              <Link href="/profile">
-                <Avatar className="h-10 w-10 cursor-pointer">
-                  <AvatarFallback>{currentUser.username.substring(0, 2).toUpperCase()}</AvatarFallback>
-                  {currentUser.avatarUrl && <AvatarImage src={currentUser.avatarUrl} alt={currentUser.fullName || currentUser.username} />}
-                </Avatar>
-              </Link>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="focus:outline-none">
+                    <Avatar className="h-10 w-10 cursor-pointer">
+                      <AvatarFallback>{currentUser.username.substring(0, 2).toUpperCase()}</AvatarFallback>
+                      {currentUser.avatarUrl && <AvatarImage src={currentUser.avatarUrl} alt={currentUser.fullName || currentUser.username} />}
+                    </Avatar>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => navigate("/profile")}>My Profile</DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => logoutMutation.mutate()}>Logout</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           ) : (
             <div className="flex space-x-2">
