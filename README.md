@@ -25,4 +25,8 @@ cd FootballConnect
 npm install
 ```
 
+<<<<<<< HEAD
 ##
+=======
+##
+>>>>>>> cbe64b1610810f50191f6d6e1298345023d1108a
