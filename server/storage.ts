@@ -12,28 +12,28 @@ import {
 
 export interface IStorage {
   // User methods
-  getUser(id: number): Promise<User | undefined>;
+  getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  updateUser(id: number, userData: Partial<User>): Promise<User | undefined>;
+  updateUser(id: string, userData: Partial<User>): Promise<User | undefined>;
   
   // Post methods
   getPosts(filter?: string): Promise<Post[]>;
   getPostById(id: number): Promise<Post | undefined>;
-  getPostsByUser(userId: number): Promise<Post[]>;
+  getPostsByUser(userId: string): Promise<Post[]>;
   createPost(post: InsertPost): Promise<Post>;
-  likePost(postId: number, userId: number): Promise<void>;
-  unlikePost(postId: number, userId: number): Promise<void>;
-  hasUserLikedPost(postId: number, userId: number): Promise<boolean>;
+  likePost(postId: number, userId: string): Promise<void>;
+  unlikePost(postId: number, userId: string): Promise<void>;
+  hasUserLikedPost(postId: number, userId: string): Promise<boolean>;
   
   // Comment methods
   getCommentsByPostId(postId: number): Promise<Comment[]>;
   createComment(comment: InsertComment): Promise<Comment>;
   
   // Connection methods
-  getConnections(userId: number): Promise<UserConnection[]>;
-  getPendingConnections(userId: number): Promise<UserConnection[]>;
-  getSuggestedConnections(userId: number): Promise<UserConnection[]>;
+  getConnections(userId: string): Promise<UserConnection[]>;
+  getPendingConnections(userId: string): Promise<UserConnection[]>;
+  getSuggestedConnections(userId: string): Promise<UserConnection[]>;
   createConnection(connection: InsertConnection): Promise<Connection>;
   updateConnectionStatus(id: number, status: string): Promise<Connection | undefined>;
   
@@ -48,12 +48,12 @@ export interface IStorage {
   createEvent(event: InsertEvent): Promise<Event>;
   
   // Message methods
-  getMessages(userId: number): Promise<Message[]>;
+  getMessages(userId: string): Promise<Message[]>;
   createMessage(message: InsertMessage): Promise<Message>;
   markMessageAsRead(id: number): Promise<void>;
   
   // Scouting insights
-  getScoutingInsights(userId: number): Promise<ScoutingData>;
+  getScoutingInsights(userId: string): Promise<ScoutingData>;
 }
 
 // We're now importing the SupabaseStorage implementation

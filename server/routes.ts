@@ -1,13 +1,68 @@
-import type { Express, Request, Response } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
 import { z } from "zod";
-import { insertUserSchema, insertPostSchema, insertCommentSchema, insertConnectionSchema } from "@shared/schema";
+import { insertPostSchema, insertCommentSchema, insertConnectionSchema } from "@shared/schema";
 import { ZodError } from "zod";
 import { fromZodError } from "zod-validation-error";
+import supabase from './supabase';
+
+// Import services instead of directly importing storage
+import {
+  userService,
+  postService,
+  commentService,
+  connectionService,
+  opportunityService,
+  eventService
+} from './services';
+
+// Middleware to extract the user from Supabase auth
+export const authenticateUser = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    // Get the auth token from the cookies or auth header
+    const token = req.headers.authorization?.split(' ')[1] || '';
+    
+    if (!token) {
+      // No token, continue as unauthenticated user
+      // DO NOT redirect to login - client handles that
+      (req as any).user = null;
+      next();
+      return;
+    }
+    
+    // Verify the token with Supabase
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    
+    if (error || !user) {
+      // Invalid token or user not found, but don't redirect
+      console.log('Invalid token or user not found');
+      (req as any).user = null;
+      next();
+      return;
+    }
+    
+    // Add the user to the request for other routes to use
+    (req as any).user = user;
+    next();
+  } catch (err) {
+    console.error('Auth error:', err);
+    // Continue as unauthenticated even on error, don't block the request
+    (req as any).user = null;
+    next();
+  }
+};
+
+// Helper to get the current user ID from the request
+function getCurrentUserId(req: Request): string | null {
+  const user = (req as any).user;
+  return user?.id || null;
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
+  
+  // Add authentication middleware to all routes
+  app.use(authenticateUser);
   
   // Error handling middleware
   const handleError = (err: Error, res: Response) => {
@@ -19,53 +74,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(500).json({ message: err.message || "Internal server error" });
   };
 
-  // Authentication routes
-  app.post("/api/auth/register", async (req: Request, res: Response) => {
-    try {
-      const { confirmPassword, ...userData } = req.body;
-      const validatedData = insertUserSchema.parse(userData);
-      
-      // Check if username already exists
-      const existingUser = await storage.getUserByUsername(validatedData.username);
-      if (existingUser) {
-        return res.status(400).json({ message: "Username already taken" });
-      }
-      
-      const user = await storage.createUser(validatedData);
-      const { password, ...userWithoutPassword } = user;
-      res.status(201).json(userWithoutPassword);
-    } catch (err) {
-      handleError(err as Error, res);
-    }
-  });
-
-  app.post("/api/auth/login", async (req: Request, res: Response) => {
-    try {
-      const loginSchema = z.object({
-        username: z.string().min(1),
-        password: z.string().min(1)
-      });
-      
-      const { username, password } = loginSchema.parse(req.body);
-      
-      const user = await storage.getUserByUsername(username);
-      if (!user || user.password !== password) {
-        return res.status(401).json({ message: "Invalid credentials" });
-      }
-      
-      const { password: _, ...userWithoutPassword } = user;
-      res.json(userWithoutPassword);
-    } catch (err) {
-      handleError(err as Error, res);
+  // Authentication status route
+  app.get("/api/auth/status", (req: Request, res: Response) => {
+    const user = (req as any).user;
+    if (user) {
+      res.json({ authenticated: true, user });
+    } else {
+      res.json({ authenticated: false });
     }
   });
 
   // User routes
   app.get("/api/users/me", async (req: Request, res: Response) => {
     try {
-      // In a real app, this would get the user from the session
-      // For now, we'll return a mock logged-in user for testing
-      const user = await storage.getUser(1); // David Beckham
+      const userId = getCurrentUserId(req);
+      
+      if (!userId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      
+      const user = await userService.getUser(userId);
       
       if (!user) {
         return res.status(404).json({ message: "User not found" });
@@ -78,6 +106,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Add PATCH route for updating user profiles
+  app.patch("/api/users/:id", async (req: Request, res: Response) => {
+    try {
+      const currentUserId = getCurrentUserId(req);
+      const targetUserId = req.params.id;
+      
+      console.log('🔄 Profile update request received:', {
+        currentUserId,
+        targetUserId,
+        body: req.body
+      });
+      
+      if (!currentUserId) {
+        console.log('❌ Profile update rejected: Not authenticated');
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      
+      // Only allow users to update their own profile
+      if (currentUserId !== targetUserId) {
+        console.log('❌ Profile update rejected: User tried to update someone else\'s profile');
+        return res.status(403).json({ message: "You can only update your own profile" });
+      }
+      
+      // Define schema for profile update
+      const updateProfileSchema = z.object({
+        full_name: z.string().min(2).optional(),
+        position: z.string().optional(),
+        club: z.string().optional(),
+        location: z.string().optional(),
+        bio: z.string().optional(),
+        avatar_url: z.string().url().optional().or(z.literal("")),
+        cover_url: z.string().url().optional().or(z.literal("")),
+      });
+      
+      // Validate the incoming data
+      console.log('🔍 Validating profile data');
+      const validatedData = updateProfileSchema.parse(req.body);
+      console.log('✅ Data validation successful:', validatedData);
+      
+      // Update the user in the database using the userService
+      console.log('💾 Calling userService.updateUser');
+      const updatedUser = await userService.updateUser(targetUserId, validatedData);
+      
+      if (!updatedUser) {
+        console.log('❌ Profile update failed: User not found');
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      // Remove sensitive fields before returning
+      const { password, ...userWithoutPassword } = updatedUser;
+      console.log('✅ Profile update completed successfully');
+      res.json(userWithoutPassword);
+    } catch (err) {
+      console.log('❌ Profile update error:', err);
+      handleError(err as Error, res);
+    }
+  });
+
   app.get("/api/users/search", async (req: Request, res: Response) => {
     try {
       const query = req.query.q as string || '';
@@ -86,16 +172,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // In a real app, this would search the database
-      // Here we'll filter the in-memory users
+      // Here we'll filter the in-memory users - this would be a good place for a userService method!
       const allUsers = [];
       for (let i = 1; i <= 10; i++) {
-        const user = await storage.getUser(i);
+        const user = await userService.getUser(i.toString());
         if (user) allUsers.push(user);
       }
       
       const filteredUsers = allUsers.filter(user => 
         user.username.toLowerCase().includes(query.toLowerCase()) ||
-        (user.fullName && user.fullName.toLowerCase().includes(query.toLowerCase())) ||
+        (user.full_name && user.full_name.toLowerCase().includes(query.toLowerCase())) ||
         (user.club && user.club.toLowerCase().includes(query.toLowerCase()))
       );
       
@@ -114,12 +200,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/posts", async (req: Request, res: Response) => {
     try {
       const filter = req.query.filter as string || 'all';
-      const posts = await storage.getPosts(filter);
+      const posts = await postService.getPosts(filter);
       
       // Add hasLiked field to each post (for current user)
-      const currentUserId = 1; // Assuming user 1 is logged in
+      const currentUserId = getCurrentUserId(req);
       const postsWithLikeStatus = await Promise.all(posts.map(async post => {
-        const hasLiked = await storage.hasUserLikedPost(post.id, currentUserId);
+        const hasLiked = currentUserId ? await postService.hasUserLikedPost(post.id, currentUserId) : false;
         return { ...post, hasLiked };
       }));
       
@@ -131,13 +217,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/posts", async (req: Request, res: Response) => {
     try {
-      // In a real app, get the current user ID from the session
-      const currentUserId = 1; // Assuming user 1 is logged in
+      const currentUserId = getCurrentUserId(req);
+      if (!currentUserId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
       
       const postData = { ...req.body, authorId: currentUserId };
       const validatedData = insertPostSchema.parse(postData);
       
-      const post = await storage.createPost(validatedData);
+      const post = await postService.createPost(validatedData);
       res.status(201).json(post);
     } catch (err) {
       handleError(err as Error, res);
@@ -146,17 +234,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/posts/user/:userId", async (req: Request, res: Response) => {
     try {
-      const userId = parseInt(req.params.userId);
-      if (isNaN(userId)) {
-        return res.status(400).json({ message: "Invalid user ID" });
-      }
-      
-      const posts = await storage.getPostsByUser(userId);
+      const userId = req.params.userId;
+      const posts = await postService.getPostsByUser(userId);
       
       // Add hasLiked field to each post (for current user)
-      const currentUserId = 1; // Assuming user 1 is logged in
+      const currentUserId = getCurrentUserId(req);
       const postsWithLikeStatus = await Promise.all(posts.map(async post => {
-        const hasLiked = await storage.hasUserLikedPost(post.id, currentUserId);
+        const hasLiked = currentUserId ? await postService.hasUserLikedPost(post.id, currentUserId) : false;
         return { ...post, hasLiked };
       }));
       
@@ -173,10 +257,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid post ID" });
       }
       
-      // In a real app, get the current user ID from the session
-      const currentUserId = 1; // Assuming user 1 is logged in
+      const currentUserId = getCurrentUserId(req);
+      if (!currentUserId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
       
-      await storage.likePost(postId, currentUserId);
+      await postService.likePost(postId, currentUserId);
       res.json({ success: true });
     } catch (err) {
       handleError(err as Error, res);
@@ -190,8 +276,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid post ID" });
       }
       
-      // In a real app, get the current user ID from the session
-      const currentUserId = 1; // Assuming user 1 is logged in
+      const currentUserId = getCurrentUserId(req);
+      if (!currentUserId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
       
       const commentData = {
         postId,
@@ -200,17 +288,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
       
       const validatedData = insertCommentSchema.parse(commentData);
-      const comment = await storage.createComment(validatedData);
+      const comment = await commentService.createComment(validatedData);
       
       // Get the author to include in response
-      const author = await storage.getUser(currentUserId);
+      const author = await userService.getUser(currentUserId);
       const commentWithAuthor = {
         ...comment,
         author: {
           id: author?.id,
           username: author?.username,
-          fullName: author?.fullName,
-          avatarUrl: author?.avatarUrl
+          fullName: author?.full_name,
+          avatarUrl: author?.avatar_url
         }
       };
       
@@ -223,10 +311,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Connection routes
   app.get("/api/connections", async (req: Request, res: Response) => {
     try {
-      // In a real app, get the current user ID from the session
-      const currentUserId = 1; // Assuming user 1 is logged in
+      const currentUserId = getCurrentUserId(req);
+      if (!currentUserId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
       
-      const connections = await storage.getConnections(currentUserId);
+      const connections = await connectionService.getConnections(currentUserId);
       res.json(connections);
     } catch (err) {
       handleError(err as Error, res);
@@ -235,10 +325,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/connections/pending", async (req: Request, res: Response) => {
     try {
-      // In a real app, get the current user ID from the session
-      const currentUserId = 1; // Assuming user 1 is logged in
+      const currentUserId = getCurrentUserId(req);
+      if (!currentUserId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
       
-      const pendingConnections = await storage.getPendingConnections(currentUserId);
+      const pendingConnections = await connectionService.getPendingConnections(currentUserId);
       res.json(pendingConnections);
     } catch (err) {
       handleError(err as Error, res);
@@ -247,10 +339,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/connections/suggested", async (req: Request, res: Response) => {
     try {
-      // In a real app, get the current user ID from the session
-      const currentUserId = 1; // Assuming user 1 is logged in
+      const currentUserId = getCurrentUserId(req);
+      if (!currentUserId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
       
-      const suggestedConnections = await storage.getSuggestedConnections(currentUserId);
+      const suggestedConnections = await connectionService.getSuggestedConnections(currentUserId);
+      res.json(suggestedConnections);
+    } catch (err) {
+      handleError(err as Error, res);
+    }
+  });
+
+  app.get("/api/connections/suggested/:userId", async (req: Request, res: Response) => {
+    try {
+      const userId = req.params.userId;
+      if (!userId) {
+        return res.status(400).json({ message: "User ID is required" });
+      }
+      
+      const suggestedConnections = await connectionService.getSuggestedConnections(userId);
       res.json(suggestedConnections);
     } catch (err) {
       handleError(err as Error, res);
@@ -259,8 +367,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/connections/connect", async (req: Request, res: Response) => {
     try {
-      // In a real app, get the current user ID from the session
-      const currentUserId = 1; // Assuming user 1 is logged in
+      const currentUserId = getCurrentUserId(req);
+      if (!currentUserId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
       
       const connectionData = {
         requesterId: currentUserId,
@@ -270,12 +380,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validatedData = insertConnectionSchema.parse(connectionData);
       
       // Validate that target user exists
-      const targetUser = await storage.getUser(validatedData.receiverId);
+      const targetUser = await userService.getUser(validatedData.receiver_id.toString());
       if (!targetUser) {
         return res.status(404).json({ message: "Target user not found" });
       }
       
-      const connection = await storage.createConnection(validatedData);
+      const connection = await connectionService.createConnection(validatedData);
       res.status(201).json(connection);
     } catch (err) {
       handleError(err as Error, res);
@@ -289,7 +399,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid connection ID" });
       }
       
-      const connection = await storage.updateConnectionStatus(connectionId, 'accepted');
+      const connection = await connectionService.updateConnectionStatus(connectionId, 'accepted');
       if (!connection) {
         return res.status(404).json({ message: "Connection not found" });
       }
@@ -307,7 +417,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid connection ID" });
       }
       
-      const connection = await storage.updateConnectionStatus(connectionId, 'declined');
+      const connection = await connectionService.updateConnectionStatus(connectionId, 'declined');
       if (!connection) {
         return res.status(404).json({ message: "Connection not found" });
       }
@@ -321,7 +431,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Opportunity routes
   app.get("/api/opportunities", async (req: Request, res: Response) => {
     try {
-      const opportunities = await storage.getOpportunities();
+      const opportunities = await opportunityService.getOpportunities();
       res.json(opportunities);
     } catch (err) {
       handleError(err as Error, res);
@@ -331,7 +441,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Event routes
   app.get("/api/events", async (req: Request, res: Response) => {
     try {
-      const events = await storage.getEvents();
+      const events = await eventService.getEvents();
       res.json(events);
     } catch (err) {
       handleError(err as Error, res);
@@ -341,12 +451,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Scouting insights route
   app.get("/api/scouting-insights/:userId", async (req: Request, res: Response) => {
     try {
-      const userId = parseInt(req.params.userId);
-      if (isNaN(userId)) {
-        return res.status(400).json({ message: "Invalid user ID" });
-      }
-      
-      const insights = await storage.getScoutingInsights(userId);
+      const userId = req.params.userId;
+      const insights = await userService.getScoutingInsights(userId);
       res.json(insights);
     } catch (err) {
       handleError(err as Error, res);

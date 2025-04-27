@@ -1,6 +1,7 @@
 import { Link } from "wouter";
 import { Event } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/lib/queryClient";
 
 interface UpcomingEventsProps {
   limit?: number;
@@ -49,31 +50,57 @@ const EventCard = ({ event }: { event: Event }) => {
 };
 
 const UpcomingEvents = ({ limit = 2 }: UpcomingEventsProps) => {
+  // Updated to fetch events from Supabase
   const { data: events, isLoading, error } = useQuery<Event[]>({
     queryKey: ["/api/events"],
+    queryFn: async () => {
+      try {
+        const now = new Date().toISOString();
+        
+        // Fetch upcoming events (events with dates greater than or equal to now)
+        const { data, error } = await supabase
+          .from('events')
+          .select('*')
+          .gte('date', now)
+          .order('date', { ascending: true })
+          .limit(limit + 5); // Fetch a few extra in case some are filtered out
+          
+        if (error) {
+          console.error("Error fetching events:", error);
+          throw error;
+        }
+        
+        return data || [];
+      } catch (error) {
+        console.error("Failed to fetch events:", error);
+        throw error;
+      }
+    }
   });
 
-  // Sample data for UI display
+  // Only use sample data if no real events are available
   const sampleEvents: Event[] = [
     {
       id: 1,
       title: "Man Utd vs. Liverpool",
       description: "Premier League Match",
-      date: new Date(2023, 9, 15).toISOString(),
+      date: new Date(2025, 4, 30),
       location: "Old Trafford, Manchester",
-      type: "match"
+      type: "match",
+      created_at: new Date()
     },
     {
       id: 2,
       title: "Premier Skills Training",
       description: "Skills Development Program",
-      date: new Date(2023, 9, 22).toISOString(),
+      date: new Date(2025, 5, 5),
       location: "Carrington Training Ground",
-      type: "training"
+      type: "training",
+      created_at: new Date()
     }
   ];
 
-  const displayEvents = events || sampleEvents;
+  const displayEvents = (events && events.length > 0) ? events : sampleEvents;
   const limitedEvents = displayEvents.slice(0, limit);
 
   if (isLoading) {

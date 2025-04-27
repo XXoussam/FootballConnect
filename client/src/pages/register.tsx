@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { supabase, queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -36,14 +36,44 @@ const Register = () => {
   });
 
   const registerMutation = useMutation({
-    mutationFn: (data: Omit<RegisterFormValues, "confirmPassword">) => 
-      apiRequest("POST", "/api/auth/register", data),
-    onSuccess: () => {
+    mutationFn: async (data: Omit<RegisterFormValues, "confirmPassword">) => {
+      // Register with Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: data.username, // Using username as email for auth
+        password: data.password,
+        options: {
+          data: {
+            full_name: data.fullName,
+          },
+        },
+      });
+      
+      if (authError) throw new Error(authError.message);
+      
+      // After successful auth signup, create the profile data in the users table
+      const { error: profileError } = await supabase.from('users').insert({
+        username: data.username,
+        full_name: data.fullName,
+        id: authData.user?.id, // Use the user ID from Supabase Auth
+      });
+      
+      if (profileError) throw new Error(profileError.message);
+      
+      return authData;
+    },
+    onSuccess: async () => {
+      // Invalidate the currentUser query to refetch the latest data
+      queryClient.invalidateQueries({ queryKey: ["currentUser"] });
+      
       toast({
         title: "Registration successful",
-        description: "Welcome to FootLink! Please log in with your new account.",
+        description: "Welcome to FootballConnect! Your account is ready.",
       });
-      navigate("/login");
+      
+      // Add a small delay before redirecting to ensure authentication is processed
+      setTimeout(() => {
+        navigate("/");
+      }, 500);
     },
     onError: (error) => {
       toast({
@@ -92,9 +122,9 @@ const Register = () => {
                 name="username"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Username</FormLabel>
+                    <FormLabel>Username/Email</FormLabel>
                     <FormControl>
-                      <Input placeholder="Choose a username" {...field} />
+                      <Input type="email" placeholder="Enter your email" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

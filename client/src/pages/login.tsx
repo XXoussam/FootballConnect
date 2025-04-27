@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { supabase, queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Link, useLocation } from "wouter";
 
 const loginSchema = z.object({
-  username: z.string().min(1, "Username is required"),
+  email: z.string().email("Valid email is required"),
   password: z.string().min(1, "Password is required"),
 });
 
@@ -24,26 +24,45 @@ const Login = () => {
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      username: "",
+      email: "",
       password: "",
     },
   });
 
   const loginMutation = useMutation({
-    mutationFn: (data: LoginFormValues) => 
-      apiRequest("POST", "/api/auth/login", data),
+    mutationFn: async (data: LoginFormValues) => {
+      console.log("Attempting login with email:", data.email);
+      const { data: authData, error } = await supabase.auth.signInWithPassword({
+        email: data.email,
+        password: data.password
+      });
+      
+      if (error) {
+        console.error("Supabase auth error:", error);
+        throw new Error(error.message);
+      }
+      
+      return authData;
+    },
     onSuccess: async () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/users/me"] });
+      // Invalidate the currentUser query to refetch the latest data
+      queryClient.invalidateQueries({ queryKey: ["currentUser"] });
+      
       toast({
         title: "Login successful",
-        description: "Welcome back to FootLink!",
+        description: "Welcome back to FootballConnect!",
       });
-      navigate("/");
+      
+      // Add a small delay before redirecting to ensure authentication is processed
+      setTimeout(() => {
+        navigate("/");
+      }, 500);
     },
     onError: (error) => {
+      console.error("Login error:", error);
       toast({
         title: "Login failed",
-        description: error.message || "Invalid username or password. Please try again.",
+        description: error.message || "Invalid email or password. Please try again.",
         variant: "destructive",
       });
     }
@@ -60,7 +79,7 @@ const Login = () => {
           <div className="flex justify-center mb-4">
             <div className="w-12 h-12 bg-primary rounded-md flex items-center justify-center text-white font-bold text-xl">FL</div>
           </div>
-          <CardTitle className="text-2xl text-center">Login to FootLink</CardTitle>
+          <CardTitle className="text-2xl text-center">Login to FootballConnect</CardTitle>
           <CardDescription className="text-center">
             Enter your credentials to access your account
           </CardDescription>
@@ -70,12 +89,12 @@ const Login = () => {
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
                 control={form.control}
-                name="username"
+                name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Username</FormLabel>
+                    <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input placeholder="Enter your username" {...field} />
+                      <Input type="email" placeholder="Enter your email" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -96,10 +115,10 @@ const Login = () => {
               />
               <Button 
                 type="submit" 
-                className="w-full" 
+                className="w-full"
                 disabled={loginMutation.isPending}
               >
-                {loginMutation.isPending ? "Logging in..." : "Log in"}
+                {loginMutation.isPending ? "Logging in..." : "Login"}
               </Button>
             </form>
           </Form>
@@ -107,8 +126,8 @@ const Login = () => {
         <CardFooter className="flex flex-col space-y-2">
           <div className="text-sm text-center text-neutral-500">
             Don't have an account?{" "}
-            <Link href="/register">
-              <a className="text-primary hover:underline">Sign up</a>
+            <Link href="/register" className="text-primary hover:underline">
+              Sign up
             </Link>
           </div>
         </CardFooter>

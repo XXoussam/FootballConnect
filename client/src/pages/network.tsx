@@ -1,136 +1,294 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import SuggestedConnections from "@/components/network/SuggestedConnections";
-import { User, UserConnection } from "@shared/schema";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { User } from "@shared/schema";
 import { useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+import { queryClient, supabase } from "@/lib/queryClient";
+import { formatDistanceToNow } from "date-fns";
+
+// Extended UserConnection type with created_at field
+interface ExtendedUserConnection {
+  id: number;
+  user: {
+    id: number;
+    username: string;
+    full_name: string;
+    position?: string;
+    club?: string;
+    avatar_url?: string;
+  };
+  created_at: string;
+}
+
+// Network service class to organize data access methods
+class NetworkService {
+  // Fetch current user data
+  static async getCurrentUser(): Promise<User | null> {
+    try {
+      // Get the current session token
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      
+      if (!accessToken) {
+        console.error("No authentication token available");
+        return null;
+      }
+      
+      // Make API request with proper auth header
+      const response = await fetch('/api/users/me', {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        console.error('Error fetching user data:', response.statusText);
+        return null;
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error("Error fetching current user:", error);
+      return null;
+    }
+  }
+
+  // Get all accepted connections for a user using server API
+  static async getConnections(userId: string): Promise<ExtendedUserConnection[]> {
+    try {
+      // Get the current session token
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      
+      if (!accessToken) {
+        throw new Error("No authentication token available");
+      }
+      
+      const response = await fetch(`/api/connections?userId=${userId}`, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) throw new Error("Failed to fetch connections");
+      return await response.json();
+    } catch (error) {
+      console.error("Error fetching connections:", error);
+      return [];
+    }
+  }
+
+  // Get pending connection requests for a user using server API
+  static async getPendingConnections(userId: string): Promise<ExtendedUserConnection[]> {
+    try {
+      // Get the current session token
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      
+      if (!accessToken) {
+        throw new Error("No authentication token available");
+      }
+      
+      const response = await fetch(`/api/connections/pending?userId=${userId}`, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) throw new Error("Failed to fetch pending connections");
+      return await response.json();
+    } catch (error) {
+      console.error("Error fetching pending connections:", error);
+      return [];
+    }
+  }
+
+  // Get suggested connections for a user using server API
+  static async getSuggestedConnections(userId: string): Promise<ExtendedUserConnection[]> {
+    try {
+      // Get the current session token
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      
+      if (!accessToken) {
+        throw new Error("No authentication token available");
+      }
+      
+      const response = await fetch(`/api/connections/suggested/${userId}`, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) throw new Error("Failed to fetch suggested connections");
+      return await response.json();
+    } catch (error) {
+      console.error("Error fetching suggested connections:", error);
+      return [];
+    }
+  }
+
+  // Update connection status (accept/decline) using server API
+  static async updateConnectionStatus(connectionId: number, status: string): Promise<any> {
+    try {
+      // Get the current session token
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      
+      if (!accessToken) {
+        throw new Error("No authentication token available");
+      }
+      
+      const response = await fetch(`/api/connections/${connectionId}/${status}`, {
+        method: "POST",
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) throw new Error(`Failed to ${status} connection`);
+      return await response.json();
+    } catch (error) {
+      console.error(`Error ${status}ing connection:`, error);
+      throw error;
+    }
+  }
+  
+  // Connect with user using server API
+  static async sendConnectionRequest(userId: number): Promise<any> {
+    try {
+      // Get the current session token
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      
+      if (!accessToken) {
+        throw new Error("No authentication token available");
+      }
+      
+      const response = await fetch(`/api/connections/connect`, {
+        method: "POST",
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ userId })
+      });
+      
+      if (!response.ok) throw new Error("Failed to send connection request");
+      return await response.json();
+    } catch (error) {
+      console.error("Error sending connection request:", error);
+      throw error;
+    }
+  }
+}
+
+// Helper function to get initials from name
+const getInitials = (name: string) => {
+  if (!name) return "";
+  return name
+    .split(" ")
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("");
+};
 
 const Network = () => {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
-  
-  const { data: currentUser } = useQuery<User | null>({
-    queryKey: ["/api/users/me"],
-  });
-  
-  const { data: connections, isLoading: isLoadingConnections } = useQuery<UserConnection[]>({
-    queryKey: ["/api/connections"],
-  });
-  
-  const { data: pendingConnections, isLoading: isLoadingPending } = useQuery<UserConnection[]>({
-    queryKey: ["/api/connections/pending"],
-  });
-  
-  const { data: searchResults, isLoading: isLoadingSearch } = useQuery<User[]>({
-    queryKey: ["/api/users/search", searchQuery],
-    enabled: searchQuery.length > 2,
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+
+  // Fetch current user
+  useEffect(() => {
+    const fetchUser = async () => {
+      const user = await NetworkService.getCurrentUser();
+      setCurrentUser(user);
+    };
+
+    fetchUser();
+  }, []);
+
+  // Fetch established connections
+  const { data: connections, isLoading: isLoadingConnections } = useQuery({
+    queryKey: ["connections", currentUser?.id],
+    queryFn: () => NetworkService.getConnections(currentUser?.id?.toString() || ""),
+    enabled: !!currentUser?.id,
   });
 
-  const connectMutation = useMutation({
-    mutationFn: (userId: number) => 
-      apiRequest("POST", `/api/connections/connect`, { userId }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/connections/suggested"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/connections/pending"] });
-      toast({
-        title: "Connection Request Sent",
-        description: "Your connection request has been sent successfully",
-      });
-    },
+  // Fetch pending connection requests
+  const { data: pendingConnections, isLoading: isLoadingPending } = useQuery({
+    queryKey: ["pendingConnections", currentUser?.id],
+    queryFn: () => NetworkService.getPendingConnections(currentUser?.id?.toString() || ""),
+    enabled: !!currentUser?.id,
   });
 
   const acceptConnectionMutation = useMutation({
-    mutationFn: (connectionId: number) => 
-      apiRequest("POST", `/api/connections/${connectionId}/accept`, {}),
+    mutationFn: (connectionId: number) =>
+      NetworkService.updateConnectionStatus(connectionId, "accepted"),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/connections"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/connections/pending"] });
+      queryClient.invalidateQueries({ queryKey: ["connections"] });
+      queryClient.invalidateQueries({ queryKey: ["pendingConnections"] });
       toast({
         title: "Connection Accepted",
         description: "You are now connected",
       });
     },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: `Failed to accept connection: ${(error as Error).message}`,
+        variant: "destructive",
+      });
+    },
   });
 
   const declineConnectionMutation = useMutation({
-    mutationFn: (connectionId: number) => 
-      apiRequest("POST", `/api/connections/${connectionId}/decline`, {}),
+    mutationFn: (connectionId: number) =>
+      NetworkService.updateConnectionStatus(connectionId, "declined"),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/connections/pending"] });
+      queryClient.invalidateQueries({ queryKey: ["pendingConnections"] });
       toast({
         title: "Connection Declined",
         description: "Connection request has been declined",
       });
     },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: `Failed to decline connection: ${(error as Error).message}`,
+        variant: "destructive",
+      });
+    },
   });
 
-  // Sample data for UI display
-  const sampleConnections: UserConnection[] = [
-    {
-      id: 1,
-      user: {
-        id: 101,
-        username: "waynerooney",
-        fullName: "Wayne Rooney",
-        position: "Forward",
-        club: "Manchester United FC",
-        avatarUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=100&q=80"
-      }
-    },
-    {
-      id: 2,
-      user: {
-        id: 102,
-        username: "gneville",
-        fullName: "Gary Neville",
-        position: "Defender",
-        club: "Manchester United FC",
-        avatarUrl: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=100&q=80"
-      }
-    },
-    {
-      id: 3,
-      user: {
-        id: 103,
-        username: "rioferdinand",
-        fullName: "Rio Ferdinand",
-        position: "Defender",
-        club: "Manchester United FC",
-        avatarUrl: "https://images.unsplash.com/photo-1534030347209-467a5b0ad3e6?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=100&q=80"
-      }
+  // Format a date relative to now (e.g., "3 days ago")
+  const formatConnectionDate = (dateString: string) => {
+    try {
+      return formatDistanceToNow(new Date(dateString), { addSuffix: true });
+    } catch (error) {
+      return "recently";
     }
-  ];
-  
-  const samplePendingConnections: UserConnection[] = [
-    {
-      id: 4,
-      user: {
-        id: 104,
-        username: "lmessi",
-        fullName: "Lionel Messi",
-        position: "Forward",
-        club: "Inter Miami CF",
-        avatarUrl: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=100&q=80"
-      }
-    }
-  ];
-
-  const displayConnections = connections || sampleConnections;
-  const displayPendingConnections = pendingConnections || samplePendingConnections;
+  };
 
   // Filter connections based on search query
-  const filteredConnections = displayConnections.filter(connection => 
-    !searchQuery || 
-    connection.user.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    connection.user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    connection.user.club?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredConnections =
+    connections?.filter(
+      (connection) =>
+        !searchQuery ||
+        connection.user.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        connection.user.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        connection.user.club?.toLowerCase().includes(searchQuery.toLowerCase())
+    ) || [];
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -143,22 +301,24 @@ const Network = () => {
         <div className="lg:col-span-2">
           <div className="bg-white rounded-xl shadow-sm mb-6">
             <div className="p-4">
-              <Input
-                placeholder="Search your connections..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full"
-                icon={<i className="fas fa-search"></i>}
-              />
+              <div className="relative">
+                <Input
+                  placeholder="Search your connections..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10"
+                />
+                <i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+              </div>
             </div>
           </div>
 
           <Tabs defaultValue="connections" className="w-full">
             <TabsList className="grid grid-cols-2 mb-6">
-              <TabsTrigger value="connections">My Connections ({displayConnections.length})</TabsTrigger>
-              <TabsTrigger value="pending">Pending ({displayPendingConnections.length})</TabsTrigger>
+              <TabsTrigger value="connections">My Connections ({connections?.length || 0})</TabsTrigger>
+              <TabsTrigger value="pending">Pending ({pendingConnections?.length || 0})</TabsTrigger>
             </TabsList>
-            
+
             <TabsContent value="connections">
               {isLoadingConnections ? (
                 // Loading state
@@ -179,7 +339,9 @@ const Network = () => {
                   <i className="fas fa-users text-4xl text-neutral-300 mb-3"></i>
                   <h3 className="text-lg font-medium mb-1">No connections found</h3>
                   <p className="text-neutral-500">
-                    {searchQuery ? "Try a different search term" : "Start building your network by connecting with players, scouts, and clubs"}
+                    {searchQuery
+                      ? "Try a different search term"
+                      : "Start building your network by connecting with players, scouts, and clubs"}
                   </p>
                 </div>
               ) : (
@@ -188,16 +350,22 @@ const Network = () => {
                     <div key={connection.id} className="p-4 flex items-center gap-4">
                       <Link href={`/profile/${connection.user.id}`}>
                         <Avatar className="w-16 h-16 cursor-pointer">
-                          <AvatarImage src={connection.user.avatarUrl} alt={connection.user.fullName} />
-                          <AvatarFallback>{connection.user.fullName.substring(0, 2).toUpperCase()}</AvatarFallback>
+                          <AvatarImage src={connection.user.avatar_url} alt={connection.user.full_name} />
+                          <AvatarFallback>{getInitials(connection.user.full_name || connection.user.username)}</AvatarFallback>
                         </Avatar>
                       </Link>
                       <div className="flex-grow">
                         <Link href={`/profile/${connection.user.id}`}>
-                          <h3 className="font-medium text-lg hover:text-primary cursor-pointer">{connection.user.fullName}</h3>
+                          <h3 className="font-medium text-lg hover:text-primary cursor-pointer">
+                            {connection.user.full_name || connection.user.username}
+                          </h3>
                         </Link>
-                        <p className="text-neutral-500">{connection.user.position} • {connection.user.club}</p>
-                        <div className="mt-1 text-sm text-neutral-500">Connected since May 2023</div>
+                        <p className="text-neutral-500">
+                          {connection.user.position || "Player"} • {connection.user.club || "Unknown club"}
+                        </p>
+                        <div className="mt-1 text-sm text-neutral-500">
+                          Connected {formatConnectionDate(connection.created_at)}
+                        </div>
                       </div>
                       <div className="flex space-x-2">
                         <Button variant="outline" size="sm">
@@ -212,7 +380,7 @@ const Network = () => {
                 </div>
               )}
             </TabsContent>
-            
+
             <TabsContent value="pending">
               {isLoadingPending ? (
                 // Loading state
@@ -232,7 +400,7 @@ const Network = () => {
                     </div>
                   ))}
                 </div>
-              ) : displayPendingConnections.length === 0 ? (
+              ) : !pendingConnections || pendingConnections.length === 0 ? (
                 <div className="bg-white rounded-xl shadow-sm p-8 text-center">
                   <i className="fas fa-user-clock text-4xl text-neutral-300 mb-3"></i>
                   <h3 className="text-lg font-medium mb-1">No pending requests</h3>
@@ -242,23 +410,29 @@ const Network = () => {
                 </div>
               ) : (
                 <div className="bg-white rounded-xl shadow-sm divide-y">
-                  {displayPendingConnections.map((connection) => (
+                  {pendingConnections.map((connection) => (
                     <div key={connection.id} className="p-4 flex items-center gap-4">
                       <Link href={`/profile/${connection.user.id}`}>
                         <Avatar className="w-16 h-16 cursor-pointer">
-                          <AvatarImage src={connection.user.avatarUrl} alt={connection.user.fullName} />
-                          <AvatarFallback>{connection.user.fullName.substring(0, 2).toUpperCase()}</AvatarFallback>
+                          <AvatarImage src={connection.user.avatar_url} alt={connection.user.full_name} />
+                          <AvatarFallback>{getInitials(connection.user.full_name || connection.user.username)}</AvatarFallback>
                         </Avatar>
                       </Link>
                       <div className="flex-grow">
                         <Link href={`/profile/${connection.user.id}`}>
-                          <h3 className="font-medium text-lg hover:text-primary cursor-pointer">{connection.user.fullName}</h3>
+                          <h3 className="font-medium text-lg hover:text-primary cursor-pointer">
+                            {connection.user.full_name || connection.user.username}
+                          </h3>
                         </Link>
-                        <p className="text-neutral-500">{connection.user.position} • {connection.user.club}</p>
-                        <div className="mt-1 text-sm text-neutral-500">Sent connection request 2 days ago</div>
+                        <p className="text-neutral-500">
+                          {connection.user.position || "Player"} • {connection.user.club || "Unknown club"}
+                        </p>
+                        <div className="mt-1 text-sm text-neutral-500">
+                          Sent connection request {formatConnectionDate(connection.created_at)}
+                        </div>
                       </div>
                       <div className="flex space-x-2">
-                        <Button 
+                        <Button
                           className="bg-primary"
                           size="sm"
                           onClick={() => acceptConnectionMutation.mutate(connection.id)}
@@ -266,8 +440,8 @@ const Network = () => {
                         >
                           Accept
                         </Button>
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           size="sm"
                           onClick={() => declineConnectionMutation.mutate(connection.id)}
                           disabled={declineConnectionMutation.isPending}
@@ -282,10 +456,10 @@ const Network = () => {
             </TabsContent>
           </Tabs>
         </div>
-        
+
         <div className="space-y-6">
           <SuggestedConnections limit={5} />
-          
+
           <div className="bg-white rounded-xl shadow-sm p-6">
             <h3 className="font-bold text-lg mb-4">Grow Your Network</h3>
             <p className="text-sm text-neutral-600 mb-4">

@@ -1,23 +1,44 @@
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { ScoutingData } from "@shared/schema";
+import { supabase } from "@/lib/queryClient";
 
 interface ScoutingInsightsProps {
-  userId?: number;
+  userId?: number | string;
 }
 
 const ScoutingInsights = ({ userId }: ScoutingInsightsProps) => {
-  const { data: insights, isLoading, error } = useQuery<ScoutingData>({
-    queryKey: ["/api/scouting-insights", userId],
-    enabled: !!userId,
-  });
-
-  // Sample data for UI display
   const sampleInsights: ScoutingData = {
     profileViews: 20,
     highlightViews: 143,
     opportunityMatches: 8
   };
+
+  const { data: insights, isLoading, error } = useQuery<ScoutingData>({
+    queryKey: ["/api/scouting-insights", userId],
+    queryFn: async () => {
+      try {
+        // Attempt to fetch from Supabase
+        const { data, error } = await supabase
+          .from('scouting_insights')
+          .select('*')
+          .eq('user_id', userId)
+          .single();
+          
+        if (error) {
+          console.error("Error fetching scouting insights:", error);
+          throw error;
+        }
+        
+        return data || sampleInsights;
+      } catch (err) {
+        console.error("Failed to fetch scouting insights:", err);
+        // Return sample data as fallback
+        return sampleInsights;
+      }
+    },
+    enabled: !!userId,
+  });
 
   const displayInsights = insights || sampleInsights;
 

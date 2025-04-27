@@ -1,253 +1,259 @@
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Opportunity } from "@shared/schema";
-import { useToast } from "@/hooks/use-toast";
-
-// Sample opportunity type to ensure proper type matching
-type SampleOpportunity = {
-  id: number;
-  title: string;
-  club: string;
-  location: string;
-  category: string;
-  position: string | null;
-  description: string | null;
-  salary: string | null;
-  type: string | null;
-  createdAt: Date;
-};
+import { Input } from "@/components/ui/input";
+import { User } from "@shared/schema";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { getCurrentUser } from "@/lib/queryClient";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Switch } from "@/components/ui/switch";
+import { useState } from "react";
+import OpportunityCard from "@/components/opportunities/OpportunityCard";
+import EmptyState from "@/components/opportunities/EmptyState";
+import OpportunityAlerts from "@/components/opportunities/OpportunityAlerts";
 
 const Opportunities = () => {
-  const { toast } = useToast();
-  const [searchQuery, setSearchQuery] = useState("");
-  const [positionFilter, setPositionFilter] = useState("");
-  const [locationFilter, setLocationFilter] = useState("");
-
-  const { data: opportunities, isLoading, error } = useQuery<Opportunity[]>({
-    queryKey: ["/api/opportunities"],
+  const { data: currentUser } = useQuery<User | null>({
+    queryKey: ["currentUser"],
+    queryFn: getCurrentUser,
   });
 
-  // Sample data for UI display
-  const sampleOpportunities: SampleOpportunity[] = [
+  // Mock data - would be replaced with actual API calls
+  const opportunities = [
     {
       id: 1,
-      title: "Midfielder Needed",
-      club: "Liverpool FC",
-      location: "Liverpool, UK",
-      category: "football",
-      position: "Midfielder",
-      description: "Looking for an experienced midfielder with strong passing skills and field vision. Opportunity to join one of the Premier League's top clubs.",
-      salary: "$50k-$80k",
-      type: null,
-      createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+      title: "Youth Team Trials",
+      organization: "Manchester City FC Academy",
+      type: "Trial",
+      location: "Manchester, UK",
+      date: "Jun 15, 2023",
+      positions: ["Forward", "Midfielder"],
+      ageRange: "16-18",
+      logoUrl: "https://randomuser.me/api/portraits/men/32.jpg",
+      description: "Join our youth development program and showcase your talent. Looking for skilled forwards and midfielders for the upcoming season."
     },
     {
       id: 2,
-      title: "Scouting Event - Forwards",
-      club: "Juventus FC",
-      location: "Turin, Italy",
-      category: "training",
-      position: "Forward",
-      description: "Scouting event for talented forwards. Showcase your skills to Juventus scouts and potentially secure a spot in our academy or first team.",
-      type: "Tryout",
-      salary: null,
-      createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+      title: "Experienced Goalkeeper Needed",
+      organization: "FC Barcelona",
+      type: "Job",
+      location: "Barcelona, Spain",
+      date: "Immediately",
+      positions: ["Goalkeeper"],
+      ageRange: "25-35",
+      logoUrl: "https://randomuser.me/api/portraits/women/44.jpg",
+      description: "Seeking an experienced goalkeeper with professional experience to join our first team squad."
     },
     {
       id: 3,
-      title: "Center-Back Position Open",
-      club: "Bayern Munich",
-      location: "Munich, Germany",
-      category: "defense",
-      position: "Defender",
-      description: "Bayern Munich is seeking a strong center-back with exceptional defensive skills, aerial ability, and leadership qualities to strengthen our backline.",
-      salary: "$70k-$90k",
-      type: null,
-      createdAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
+      title: "Summer Football Camp",
+      organization: "Elite Soccer Training",
+      type: "Training",
+      location: "London, UK",
+      date: "Jul 10-24, 2023",
+      positions: ["All Positions"],
+      ageRange: "14-21",
+      logoUrl: "https://randomuser.me/api/portraits/men/67.jpg",
+      description: "Intensive two-week training camp focused on technical skills development, tactical awareness, and physical conditioning."
     },
     {
       id: 4,
-      title: "Goalkeeper Coach",
-      club: "Arsenal FC",
-      location: "London, UK",
-      category: "coaching",
-      position: "Coach",
-      description: "Experienced goalkeeper coach needed to train and develop our goalkeeping talent across all levels from academy to first team.",
-      salary: "$65k-$85k",
-      type: null,
-      createdAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
+      title: "Defensive Coach Position",
+      organization: "Ajax Football Academy",
+      type: "Job",
+      location: "Amsterdam, Netherlands",
+      date: "Starting Aug 2023",
+      positions: ["Coach"],
+      ageRange: "30+",
+      logoUrl: "https://randomuser.me/api/portraits/men/22.jpg",
+      description: "Looking for an experienced defensive coach to join our youth academy coaching staff."
     },
     {
       id: 5,
-      title: "Youth Academy Trials",
-      club: "Ajax Amsterdam",
-      location: "Amsterdam, Netherlands",
-      category: "academy",
-      position: "Various",
-      description: "Ajax's prestigious youth academy is holding trials for talented young players across all positions. Ages 12-18 welcome.",
-      type: "Youth Development",
-      salary: null,
-      createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+      title: "Professional Trials - Strikers",
+      organization: "Borussia Dortmund",
+      type: "Trial",
+      location: "Dortmund, Germany",
+      date: "Jul 5-7, 2023",
+      positions: ["Striker"],
+      ageRange: "18-24",
+      logoUrl: "https://randomuser.me/api/portraits/men/45.jpg",
+      description: "Open trials for striker position. Seeking prolific goalscorers with pace and technical ability."
+    },
+    {
+      id: 6,
+      title: "Women's Team Expansion",
+      organization: "Arsenal Women FC",
+      type: "Trial",
+      location: "London, UK",
+      date: "Jun 28-30, 2023",
+      positions: ["All Positions"],
+      ageRange: "18-28",
+      logoUrl: "https://randomuser.me/api/portraits/women/28.jpg",
+      description: "Expanding our women's team roster. Looking for talented female players across all positions."
     }
   ];
 
-  // Use sample data when API data is not available
-  const displayOpportunities = opportunities || sampleOpportunities as any;
+  // Mock events
+  const events = [
+    {
+      id: 1,
+      title: "International Scouting Showcase",
+      organizer: "Global Football Network",
+      date: "May 28-30, 2023",
+      location: "Berlin, Germany",
+      attendees: 145,
+      imageUrl: "https://source.unsplash.com/random/300x200/?football,event"
+    },
+    {
+      id: 2,
+      title: "Football Career Expo 2023",
+      organizer: "Sports Career Alliance",
+      date: "Jun 12, 2023",
+      location: "London, UK",
+      attendees: 230,
+      imageUrl: "https://source.unsplash.com/random/300x200/?stadium,football"
+    }
+  ];
 
-  // Apply filters
-  const filteredOpportunities = displayOpportunities.filter(opportunity => {
-    const matchesSearch = searchQuery === "" || 
-      opportunity.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      opportunity.club.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      opportunity.description?.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const matchesPosition = positionFilter === "all" || positionFilter === "" || 
-      opportunity.position?.toLowerCase() === positionFilter.toLowerCase();
-    
-    const matchesLocation = locationFilter === "all" || locationFilter === "" ||
-      opportunity.location.toLowerCase().includes(locationFilter.toLowerCase());
-    
-    return matchesSearch && matchesPosition && matchesLocation;
-  });
-
-  const handleApply = (opportunityId: number) => {
-    toast({
-      title: "Application Submitted",
-      description: "Your application has been sent to the club. Good luck!",
-    });
-  };
+  // Toggle states
+  const [trials, setTrials] = useState(true);
+  const [jobs, setJobs] = useState(false);
+  const [positions, setPositions] = useState(true);
+  const [training, setTraining] = useState(false);
 
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Football Opportunities</h1>
-        <p className="text-neutral-600">Find the perfect opportunity to advance your football career</p>
+        <h1 className="text-3xl font-bold mb-2">Opportunities</h1>
+        <p className="text-neutral-600">Discover trials, jobs, and events in the football industry</p>
       </div>
 
-      {/* Filters */}
-      <div className="bg-white rounded-xl shadow-sm p-6 mb-8">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-medium mb-1 text-neutral-700">Search</label>
-            <Input
-              placeholder="Search by title, club or keyword..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1 text-neutral-700">Position</label>
-            <Select value={positionFilter} onValueChange={setPositionFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="All Positions" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectItem value="all">All Positions</SelectItem>
-                  <SelectItem value="goalkeeper">Goalkeeper</SelectItem>
-                  <SelectItem value="defender">Defender</SelectItem>
-                  <SelectItem value="midfielder">Midfielder</SelectItem>
-                  <SelectItem value="forward">Forward</SelectItem>
-                  <SelectItem value="coach">Coach</SelectItem>
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1 text-neutral-700">Location</label>
-            <Select value={locationFilter} onValueChange={setLocationFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="All Locations" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectItem value="all">All Locations</SelectItem>
-                  <SelectItem value="UK">United Kingdom</SelectItem>
-                  <SelectItem value="Spain">Spain</SelectItem>
-                  <SelectItem value="Italy">Italy</SelectItem>
-                  <SelectItem value="Germany">Germany</SelectItem>
-                  <SelectItem value="France">France</SelectItem>
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      </div>
-
-      {/* Opportunities List */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {isLoading ? (
-          // Loading state
-          Array(6).fill(0).map((_, index) => (
-            <div key={index} className="bg-white rounded-xl shadow-sm p-6 animate-pulse">
-              <div className="h-6 bg-gray-200 rounded w-3/4 mb-4"></div>
-              <div className="h-4 bg-gray-200 rounded w-1/2 mb-4"></div>
-              <div className="h-24 bg-gray-200 rounded mb-4"></div>
-              <div className="h-8 bg-gray-200 rounded w-1/3"></div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2">
+          <div className="bg-white rounded-xl shadow-sm mb-6">
+            <div className="p-4 flex flex-col sm:flex-row gap-3">
+              <Input 
+                placeholder="Search opportunities..."
+                className="flex-grow"
+              />
+              <Button variant="outline" className="whitespace-nowrap">
+                <i className="fas fa-filter mr-2"></i>
+                Filters
+              </Button>
             </div>
-          ))
-        ) : error ? (
-          <div className="col-span-3 text-center py-12">
-            <p className="text-red-500">Failed to load opportunities</p>
           </div>
-        ) : filteredOpportunities.length === 0 ? (
-          <div className="col-span-3 text-center py-12">
-            <i className="fas fa-search text-4xl text-neutral-300 mb-3"></i>
-            <h3 className="text-lg font-medium mb-1">No opportunities found</h3>
-            <p className="text-neutral-500">Try adjusting your search filters</p>
+
+          <Tabs defaultValue="all" className="w-full">
+            <TabsList className="grid grid-cols-4 mb-6">
+              <TabsTrigger value="all">All</TabsTrigger>
+              <TabsTrigger value="trials">Trials</TabsTrigger>
+              <TabsTrigger value="jobs">Jobs</TabsTrigger>
+              <TabsTrigger value="training">Training</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="all" className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {opportunities.map(opportunity => (
+                <OpportunityCard key={opportunity.id} opportunity={opportunity} />
+              ))}
+            </TabsContent>
+            
+            <TabsContent value="trials" className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {opportunities.filter(opp => opp.type === 'Trial').length > 0 ? (
+                opportunities
+                  .filter(opp => opp.type === 'Trial')
+                  .map(opportunity => (
+                    <OpportunityCard key={opportunity.id} opportunity={opportunity} />
+                  ))
+              ) : (
+                <div className="col-span-2">
+                  <EmptyState 
+                    type="trials" 
+                    icon="fa-clipboard-list" 
+                  />
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="jobs" className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {opportunities.filter(opp => opp.type === 'Job').length > 0 ? (
+                opportunities
+                  .filter(opp => opp.type === 'Job')
+                  .map(opportunity => (
+                    <OpportunityCard key={opportunity.id} opportunity={opportunity} />
+                  ))
+              ) : (
+                <div className="col-span-2">
+                  <EmptyState 
+                    type="jobs" 
+                    icon="fa-briefcase" 
+                  />
+                </div>
+              )}
+            </TabsContent>
+            
+            <TabsContent value="training" className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {opportunities.filter(opp => opp.type === 'Training').length > 0 ? (
+                opportunities
+                  .filter(opp => opp.type === 'Training')
+                  .map(opportunity => (
+                    <OpportunityCard key={opportunity.id} opportunity={opportunity} />
+                  ))
+              ) : (
+                <div className="col-span-2">
+                  <EmptyState 
+                    type="training programs" 
+                    icon="fa-graduation-cap"
+                  />
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+        </div>
+
+        {/* Sidebar */}
+        <div className="space-y-6">
+          <div className="bg-white rounded-xl shadow-sm p-6">
+            <h3 className="font-bold text-lg mb-4">Upcoming Events</h3>
+            <div className="space-y-4">
+              {events.map(event => (
+                <div key={event.id} className="border-b pb-4 last:border-b-0 last:pb-0">
+                  <img 
+                    src={event.imageUrl} 
+                    alt={event.title}
+                    className="w-full h-32 object-cover rounded-lg mb-3"
+                  />
+                  <h4 className="font-medium">{event.title}</h4>
+                  <div className="text-sm text-neutral-600 mt-1">{event.organizer}</div>
+                  <div className="flex flex-wrap items-center text-sm text-neutral-500 mt-2 gap-x-4 gap-y-1">
+                    <span className="flex items-center">
+                      <i className="fas fa-calendar mr-1"></i>
+                      {event.date}
+                    </span>
+                    <span className="flex items-center">
+                      <i className="fas fa-map-marker-alt mr-1"></i>
+                      {event.location}
+                    </span>
+                    <span className="flex items-center">
+                      <i className="fas fa-users mr-1"></i>
+                      {event.attendees} attending
+                    </span>
+                  </div>
+                  <Button variant="outline" size="sm" className="mt-2 w-full">
+                    View Event
+                  </Button>
+                </div>
+              ))}
+              <Button variant="link" className="w-full">
+                View all events <i className="fas fa-arrow-right ml-1"></i>
+              </Button>
+            </div>
           </div>
-        ) : (
-          filteredOpportunities.map((opportunity) => (
-            <Card key={opportunity.id} className="overflow-hidden">
-              <CardHeader className="pb-2">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <CardTitle>{opportunity.title}</CardTitle>
-                    <CardDescription>{opportunity.club}</CardDescription>
-                  </div>
-                  <div className={`w-10 h-10 ${opportunity.category === 'football' ? 'bg-primary/10' : opportunity.category === 'training' ? 'bg-secondary/10' : 'bg-amber-500/10'} rounded-lg flex items-center justify-center flex-shrink-0`}>
-                    <i className={`${opportunity.category === 'football' ? 'fas fa-futbol text-primary' : opportunity.category === 'training' ? 'fas fa-running text-secondary' : 'fas fa-shield-alt text-amber-500'}`}></i>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center text-sm text-neutral-500 mb-3">
-                  <i className="fas fa-map-marker-alt mr-2"></i>
-                  <span>{opportunity.location}</span>
-                </div>
-                <p className="text-sm mb-4">{opportunity.description}</p>
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {opportunity.position && (
-                    <span className="text-xs bg-neutral-100 text-neutral-700 px-2 py-1 rounded-full">
-                      {opportunity.position}
-                    </span>
-                  )}
-                  {opportunity.salary && (
-                    <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
-                      {opportunity.salary}
-                    </span>
-                  )}
-                  {opportunity.type && (
-                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-                      {opportunity.type}
-                    </span>
-                  )}
-                </div>
-                <Button 
-                  className="w-full"
-                  onClick={() => handleApply(opportunity.id)}
-                >
-                  Apply Now
-                </Button>
-              </CardContent>
-            </Card>
-          ))
-        )}
+          
+          <OpportunityAlerts />
+        </div>
       </div>
     </div>
   );

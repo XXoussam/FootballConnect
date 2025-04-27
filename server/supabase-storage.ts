@@ -14,7 +14,7 @@ import { IStorage } from './storage';
 
 export class SupabaseStorage implements IStorage {
   // User methods
-  async getUser(id: number): Promise<User | undefined> {
+  async getUser(id: string): Promise<User | undefined> {
     const { data } = await supabase
       .from('users')
       .select()
@@ -45,15 +45,28 @@ export class SupabaseStorage implements IStorage {
     return data;
   }
   
-  async updateUser(id: number, userData: Partial<User>): Promise<User | undefined> {
-    const { data } = await supabase
-      .from('users')
-      .update(userData)
-      .eq('id', id)
-      .select()
-      .single();
+  async updateUser(id: string, userData: Partial<User>): Promise<User | undefined> {
+    console.log('📝 Attempting to update user profile in Supabase:', { id, userData });
     
-    return data || undefined;
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .update(userData)
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('❌ Supabase update error:', error);
+        throw error;
+      }
+      
+      console.log('✅ User profile updated successfully:', data);
+      return data || undefined;
+    } catch (err) {
+      console.error('❌ Exception during profile update:', err);
+      throw err;
+    }
   }
   
   // Post methods
@@ -109,7 +122,7 @@ export class SupabaseStorage implements IStorage {
     };
   }
   
-  async getPostsByUser(userId: number): Promise<Post[]> {
+  async getPostsByUser(userId: string): Promise<Post[]> {
     const { data } = await supabase
       .from('posts')
       .select(`
@@ -137,13 +150,13 @@ export class SupabaseStorage implements IStorage {
   async createPost(post: InsertPost): Promise<Post> {
     // Convert Drizzle-style camelCase to Supabase snake_case
     const supabasePost = {
-      author_id: post.authorId,
+      author_id: post.author_id,
       content: post.content,
       type: post.type || 'text',
-      media_url: post.mediaUrl,
-      achievement_title: post.achievementTitle,
-      achievement_subtitle: post.achievementSubtitle,
-      stats_data: post.statsData,
+      media_url: post.media_url,
+      achievement_title: post.achievement_title,
+      achievement_subtitle: post.achievement_subtitle,
+      stats_data: post.stats_data,
       likes: 0
     };
     
@@ -159,7 +172,7 @@ export class SupabaseStorage implements IStorage {
     return this.getPostById(data.id) as Promise<Post>;
   }
   
-  async likePost(postId: number, userId: number): Promise<void> {
+  async likePost(postId: number, userId: string): Promise<void> {
     // Check if user already liked the post
     const { data: existingLike } = await supabase
       .from('likes')
@@ -185,7 +198,7 @@ export class SupabaseStorage implements IStorage {
     }
   }
   
-  async unlikePost(postId: number, userId: number): Promise<void> {
+  async unlikePost(postId: number, userId: string): Promise<void> {
     // Delete the like
     const { data } = await supabase
       .from('likes')
@@ -202,7 +215,7 @@ export class SupabaseStorage implements IStorage {
     }
   }
   
-  async hasUserLikedPost(postId: number, userId: number): Promise<boolean> {
+  async hasUserLikedPost(postId: number, userId: string): Promise<boolean> {
     const { data } = await supabase
       .from('likes')
       .select()
@@ -227,8 +240,8 @@ export class SupabaseStorage implements IStorage {
   async createComment(comment: InsertComment): Promise<Comment> {
     // Convert to snake_case
     const supabaseComment = {
-      post_id: comment.postId,
-      author_id: comment.authorId,
+      post_id: comment.post_id,
+      author_id: comment.author_id,
       content: comment.content
     };
     
@@ -243,7 +256,7 @@ export class SupabaseStorage implements IStorage {
   }
   
   // Connection methods
-  async getConnections(userId: number): Promise<UserConnection[]> {
+  async getConnections(userId: string): Promise<UserConnection[]> {
     // Get all accepted connections where userId is either requester or receiver
     const { data } = await supabase
       .from('connections')
@@ -259,31 +272,30 @@ export class SupabaseStorage implements IStorage {
     
     // Return user connection objects with the other user's info
     return data.map(connection => {
-      const otherUser = connection.requester_id === userId 
-        ? connection.receiver 
-        : connection.requester;
+      const isRequester = connection.requester_id === userId;
+      const otherUser = isRequester ? connection.receiver : connection.requester;
       
       return {
         id: connection.id,
         user: {
           id: otherUser.id,
           username: otherUser.username,
-          fullName: otherUser.full_name || otherUser.username,
+          full_name: otherUser.full_name || otherUser.username,
           position: otherUser.position,
           club: otherUser.club,
-          avatarUrl: otherUser.avatar_url
+          avatar_url: otherUser.avatar_url
         }
       };
     });
   }
   
-  async getPendingConnections(userId: number): Promise<UserConnection[]> {
+  async getPendingConnections(userId: string): Promise<UserConnection[]> {
     // Get all pending connections where userId is the receiver
     const { data } = await supabase
       .from('connections')
       .select(`
         *,
-        requester:users!requester_id(*)
+        requester:users!requester_id(*) 
       `)
       .eq('status', 'pending')
       .eq('receiver_id', userId);
@@ -291,68 +303,103 @@ export class SupabaseStorage implements IStorage {
     if (!data) return [];
     
     // Return user connection objects with the requester's info
-    return data.map(connection => {
-      return {
-        id: connection.id,
-        user: {
-          id: connection.requester.id,
-          username: connection.requester.username,
-          fullName: connection.requester.full_name || connection.requester.username,
-          position: connection.requester.position,
-          club: connection.requester.club,
-          avatarUrl: connection.requester.avatar_url
-        }
-      };
-    });
-  }
-  
-  async getSuggestedConnections(userId: number): Promise<UserConnection[]> {
-    // This is more complex with Supabase, may require a custom function
-    // Simple approach: fetch some users who are not already connected
-    const { data: existingConnections } = await supabase
-      .from('connections')
-      .select('requester_id, receiver_id')
-      .or(`requester_id.eq.${userId},receiver_id.eq.${userId}`);
-    
-    // Create a set of user IDs who are already connected
-    const connectedIds = new Set<number>();
-    connectedIds.add(userId); // Add the current user
-
-    if (existingConnections) {
-      existingConnections.forEach(connection => {
-        connectedIds.add(connection.requester_id);
-        connectedIds.add(connection.receiver_id);
-      });
-    }
-    
-    // Fetch users who are not in the connected set
-    const { data: suggestedUsers } = await supabase
-      .from('users')
-      .select()
-      .not('id', 'in', `(${Array.from(connectedIds).join(',')})`)
-      .limit(5);
-    
-    if (!suggestedUsers) return [];
-    
-    // Map to UserConnection format
-    return suggestedUsers.map(user => ({
-      id: -user.id, // Temporary negative ID for frontend
+    return data.map(connection => ({
+      id: connection.id,
       user: {
-        id: user.id,
-        username: user.username,
-        fullName: user.full_name || user.username,
-        position: user.position,
-        club: user.club,
-        avatarUrl: user.avatar_url
+        id: connection.requester.id,
+        username: connection.requester.username,
+        full_name: connection.requester.full_name || connection.requester.username,
+        position: connection.requester.position,
+        club: connection.requester.club,
+        avatar_url: connection.requester.avatar_url
       }
     }));
+  }
+  
+  async getSuggestedConnections(userId: string): Promise<UserConnection[]> {
+    try {
+      // Get existing connections to exclude them from suggestions
+      const { data: existingConnections, error: connectionsError } = await supabase
+        .from('connections')
+        .select('requester_id, receiver_id')
+        .or(`requester_id.eq.${userId},receiver_id.eq.${userId}`);
+      
+      if (connectionsError) {
+        console.error('Error fetching existing connections:', connectionsError);
+        return [];
+      }
+      
+      // Create a set of user IDs who are already connected
+      const connectedIds = new Set<string>();
+      connectedIds.add(userId); // Add the current user
+
+      if (existingConnections && existingConnections.length > 0) {
+        existingConnections.forEach(connection => {
+          connectedIds.add(connection.requester_id);
+          connectedIds.add(connection.receiver_id);
+        });
+      }
+      
+      // Fetch users who are not in the connected set
+      let query = supabase.from('users').select('*');
+      
+      // Filter out the connected users
+      if (connectedIds.size > 1) { // More than just the current user
+        const idArray = Array.from(connectedIds);
+        
+        // Using .neq for a single ID or proper array format for multiple IDs
+        if (idArray.length === 1) {
+          query = query.neq('id', idArray[0]);
+        } else {
+          // For multiple IDs, use filter with correct PostgreSQL syntax
+          // Remove the quotes around UUIDs to fix the syntax error
+          query = query.filter('id', 'not.in', `(${idArray.join(',')})`);
+        }
+      } else {
+        // If no connections yet, just exclude the current user
+        query = query.neq('id', userId);
+      }
+      
+      // Limit to 5 suggested users and order by recent sign ups
+      const { data: suggestedUsers, error: suggestedError } = await query
+        .limit(5)
+        .order('created_at', { ascending: false });
+      
+      if (suggestedError) {
+        console.error('Error fetching suggested users:', suggestedError);
+        return [];
+      }
+      
+      if (!suggestedUsers || suggestedUsers.length === 0) {
+        console.log('No suggested users found for user:', userId);
+        return [];
+      }
+      
+      console.log(`Found ${suggestedUsers.length} suggested users for user: ${userId}`);
+      
+      // Map to UserConnection format
+      return suggestedUsers.map(user => ({
+        id: parseInt(user.id, 10) || Math.floor(Math.random() * 10000), // Convert to number or use random ID
+        user: {
+          id: user.id,
+          username: user.username,
+          full_name: user.full_name || user.username,
+          position: user.position || 'Player',
+          club: user.club || 'Not specified',
+          avatar_url: user.avatar_url
+        }
+      }));
+    } catch (error) {
+      console.error('Error in getSuggestedConnections:', error);
+      return [];
+    }
   }
   
   async createConnection(connection: InsertConnection): Promise<Connection> {
     // Convert to snake_case
     const supabaseConnection = {
-      requester_id: connection.requesterId,
-      receiver_id: connection.receiverId,
+      requester_id: connection.requester_id,
+      receiver_id: connection.receiver_id,
       status: 'pending'
     };
     
@@ -452,7 +499,7 @@ export class SupabaseStorage implements IStorage {
   }
   
   // Message methods
-  async getMessages(userId: number): Promise<Message[]> {
+  async getMessages(userId: string): Promise<Message[]> {
     const { data } = await supabase
       .from('messages')
       .select()
@@ -465,8 +512,8 @@ export class SupabaseStorage implements IStorage {
   async createMessage(message: InsertMessage): Promise<Message> {
     // Convert to snake_case
     const supabaseMessage = {
-      sender_id: message.senderId,
-      receiver_id: message.receiverId,
+      sender_id: message.sender_id,
+      receiver_id: message.receiver_id,
       content: message.content,
       read: false
     };
@@ -489,7 +536,7 @@ export class SupabaseStorage implements IStorage {
   }
   
   // Scouting insights
-  async getScoutingInsights(userId: number): Promise<ScoutingData> {
+  async getScoutingInsights(userId: string): Promise<ScoutingData> {
     // In a real app, this would calculate metrics based on database queries
     // For now, return mock data
     return {
